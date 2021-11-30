@@ -1,14 +1,22 @@
 var express = require('express');
+var uniqueValidator = require('mongoose-unique-validator');
 var mongoose = require('mongoose');
 var jwt = require('jsonwebtoken');
+var Schema = mongoose.Schema;
+var Article = require('../models/Article');
 
 var bcrypt = require('bcrypt');
 
 var userSchema = new mongoose.Schema({
-    name: {type: 'string', required: true},
-    email: {type: 'string', required: true, unique: true},
-    password: {type: 'string', minlength: 5, required: true},
+    username: {type: 'string',  required: true},
+    email: {type: 'string', lowercase: true, required: true, unique: true},
+    bio: { type: String },
+    image: {type: String },
+    favorites: [{ type: Schema.Types.ObjectId, ref: 'Article' }],
+    following: [{ type: Schema.Types.ObjectId, ref: 'User' }],
 }, {timestamps: true});
+
+userSchema.plugin(uniqueValidator, {message: 'is already taken.'});
 
 // pre save hook
 userSchema.pre('save', async function(next) {
@@ -16,6 +24,8 @@ userSchema.pre('save', async function(next) {
         this.password = await bcrypt.hash(this.password, 10);
     } next();
 });
+
+
 // To verify password 
 userSchema.methods.verifyPassword = async function(password) {
     try {
@@ -28,20 +38,59 @@ userSchema.methods.verifyPassword = async function(password) {
 
 // Generate token to authenticate the user
 userSchema.methods.signToken = async function() {
-    var payload = {userId: this._id, email: this.email}; 
+    var payload = { userId: this._id, email: this.email}; 
     try {
-        var token = await jwt.sign(payload, "thisisasecreat");
-        return token;
+    var token = await jwt.sign(payload, "thisisasecreat");
+    return token;
     } catch(err) {
         throw err;
     }
 }
+
 // Only passing the appropiarte fields to the user
 userSchema.methods.userJSON = function(token) {
     return {
-        name: this.name,
+        username: this.username,
         email: this.email,
-        token: token
+        bio: this.bio,
+        image: this.image,
+        token: token,
     }
 }
+
+// Profile method
+userSchema.methods.toProfileJSONFor = function(user){
+    return {
+      username: this.username,
+      bio: this.bio,
+      image: this.image || 'https://static.productionready.io/images/smiley-cyrus.jpg',
+      following: user ? user.isFollowing(this._id) : false
+    };
+};
+
+
+    
+
+
+
+
+  
+userSchema.methods.follow = function(id){
+    if(this.following.indexOf(id) === -1){
+      this.following.push(id);
+    }
+  return this.save();
+};
+  
+userSchema.methods.unfollow = function(id){
+    this.following.remove(id);
+    return this.save();
+};
+  
+userSchema.methods.isFollowing = function(id){
+    return this.following.some(function(followId){
+      return followId.toString() === id.toString();
+    });
+};
+
 module.exports = mongoose.model('User', userSchema);

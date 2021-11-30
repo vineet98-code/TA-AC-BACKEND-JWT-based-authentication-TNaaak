@@ -14,7 +14,11 @@
     "jade": "~1.11.0",
     "jsonwebtoken": "^8.5.1",
     "mongoose": "^6.0.13",
+    "mongoose-slug-generator": "^1.0.4",
+    "mongoose-unique-validator": "^3.0.0",
     "morgan": "~1.9.1",
-    "nodemon": "^2.0.15"
+    "nodemon": "^2.0.15",
+    "slug": "^5.1.0",
+    "slugger": "^1.0.1"
   }
 }

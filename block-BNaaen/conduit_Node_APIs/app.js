@@ -10,7 +10,7 @@ var jwt = require("jsonwebtoken");
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
 var userRouter = require('./routes/user');
-var profilesRouter = require('./routes/profile');
+var profilesRouter = require('./routes/profiles');
 var articlesRouter = require('./routes/articles');
 
 var app = express();
@@ -33,7 +33,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/api', indexRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/user', userRouter);
-app.use('/api/profile', profilesRouter);
+app.use('/api/profiles', profilesRouter);
 app.use('/api/articles', articlesRouter);
 
 
