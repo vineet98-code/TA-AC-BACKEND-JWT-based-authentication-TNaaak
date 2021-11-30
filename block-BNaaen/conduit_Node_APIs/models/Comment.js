@@ -1,11 +1,16 @@
-var mongoose = require('mongoose');
-var Schema = mongoose.Schema;
+let mongoose = require('mongoose');
+let Schema = mongoose.Schema;
 
-var userSchema = new Schema({
-    username:{type: String, required: true},
-    email: {type: String, required: true},
-    bio:{type: String},
-    image:{type: String}
-})
+let commentSchema = new Schema(
+  {
+    body: { type: String, required: true },
+    author: { type: Schema.Types.ObjectId, ref: 'User' },
+    article: { type: Schema.Types.ObjectId, ref: 'Article' },
 
-module.exports = mongoose.model('User', userSchema);
+  }, { timestamps: true }
+);
+
+
+
+
+module.exports = mongoose.model('Comment', commentSchema);
