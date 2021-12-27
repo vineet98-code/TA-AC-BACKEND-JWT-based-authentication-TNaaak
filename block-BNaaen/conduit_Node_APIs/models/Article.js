@@ -32,18 +32,22 @@ articleSchema.methods.updateFavoriteCount = function () {
 };
 
 
-articleSchema.methods.toJSONFor = async function (user) {
+articleSchema.methods.toJSONFor = function(user) {
   return {
     slug: this.slug,
     title: this.title,
     description: this.description,
     body: this.body,
-    createdAt: this.createdAt,
-    updatedAt: this.updatedAt,
     tagList: this.tagList,
     favorited: user ? user.isFavorite(this._id) : false,
     favoritesCount: this.favoritesCount,
-    author: user.toProfileJSONFor(user)
+    author: {
+      username: this.author.username,
+      bio: this.author.bio,
+      email: this.author.email,
+      image: this.image || 'https://static.productionready.io/images/smiley-cyrus.jpg',
+      following: user ? user.isFollowing(this._id) : false
+    }
   };
 };
 

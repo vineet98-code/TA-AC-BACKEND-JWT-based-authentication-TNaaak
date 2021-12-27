@@ -14,12 +14,14 @@ var userSchema = new mongoose.Schema({
     image: {type: String },
     favorites: [{ type: Schema.Types.ObjectId, ref: 'Article' }],
     following: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+    followers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+
 }, {timestamps: true});
 
 userSchema.plugin(uniqueValidator, {message: 'is already taken.'});
 
 // pre save hook
-userSchema.pre('save', async function(next) {
+userSchema.pre('save', async function (next) {
     if (this.password && this.isModified('password')) {
         this.password = await bcrypt.hash(this.password, 10);
     } next();
@@ -27,12 +29,12 @@ userSchema.pre('save', async function(next) {
 
 
 // To verify password 
-userSchema.methods.verifyPassword = async function(password) {
+userSchema.methods.verifyPassword = async function (password) {
     try {
         var result =  await bcrypt.compare(password, this.password);
         return result;
       } catch (err) {
-        throw err;
+        return err;
     }
 };
 
@@ -48,13 +50,15 @@ userSchema.methods.signToken = async function() {
 }
 
 // Only passing the appropiarte fields to the user
-userSchema.methods.userJSON = function(token) {
+userSchema.methods.userJSON = function(user, token) {
     return {
         username: this.username,
         email: this.email,
         bio: this.bio,
         image: this.image,
         token: token,
+        following: this.user ? user.isFollowing(this._id) : false,
+        followers: this.user ? user.isFollowers(this._id) : false
     }
 }
 
@@ -68,25 +72,6 @@ userSchema.methods.toProfileJSONFor = function(user){
     };
 };
 
-
-    
-
-
-
-
-  
-userSchema.methods.follow = function(id){
-    if(this.following.indexOf(id) === -1){
-      this.following.push(id);
-    }
-  return this.save();
-};
-  
-userSchema.methods.unfollow = function(id){
-    this.following.remove(id);
-    return this.save();
-};
-  
 userSchema.methods.isFollowing = function(id){
     return this.following.some(function(followId){
       return followId.toString() === id.toString();
