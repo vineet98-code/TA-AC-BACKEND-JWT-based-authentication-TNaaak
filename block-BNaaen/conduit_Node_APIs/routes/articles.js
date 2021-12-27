@@ -6,8 +6,6 @@ var Article = require('../models/Article');
 var Comment = require('../models/Comment');
 var slug = require('slug');
 
-
-
 // create articles
 router.post('/', auth.verifyToken, async (req, res, next) => {
 
@@ -17,80 +15,66 @@ router.post('/', auth.verifyToken, async (req, res, next) => {
 
         const article = await Article.create(req.body);
 
-        await Article.findOne({ _id: article._id }).populate("author","username email").populate("comments").exec((err, articleData) => {
-            if (err) {
-                return res.status(500).json({ success: false, err, data: null })
-            }
-            return res.json({ data: articleData })
-        });
-
+        var articleData = await Article.findOne({ _id: article._id }).populate("author","username email following" ).populate("comments").exec();
+            
+            return res.json({ 
+                article: articleData.toJSONFor() })
     } catch (error) {
         next(error);
     }
 });
 
 
-
-// listing all articles
-router.get('/', async (req, res, next) => {
-    var query = {};
-    var limit = 20;
-    var offset = 0;
-
-    if (typeof req.query.limit !== 'undefined') {
-        limit = req.query.limit;
-    }
-
-    if (typeof req.query.offset !== 'undefined') {
-        offset = req.query.offset;
-    }
-
+// Get all articles
+router.get('/', auth.optionalAuth, async function (req, res, next) {
+    const query = {}
+    const { limit, offset} = req.query
+  
     if (typeof req.query.tag !== 'undefined') {
-        query.tagList = { "$in": [req.query.tag] };
+      query.tagList = { $in: [req.query.tag] }
     }
-
-
+    
     Promise.all([
         req.query.author ? User.findOne({ username: req.query.author }) : null,
         req.query.favorited ? User.findOne({ username: req.query.favorited }) : null
     ]).then(function (results) {
-        var author = results[0];
-        var favoriter = results[1];
-
+        const [author, favoriter] = results
+        
         if (author) {
             query.author = author._id
-        }
+        } else if (req.query.author) {
+            query._id = { $in: [] }
 
+        }
         if (favoriter) {
             query._id = { $in: favoriter.favorites }
         } else if (req.query.favorited) {
             query._id = { $in: [] }
         }
-        return Promise.all([
-            Article.find(query)
-                .limit(Number(limit))
-                .skip(Number(offset))
-                .sort({ createdAt: 'desc' })
-                .populate('author')
-                .exec(),
-            Article.count(query).exec(),
-            req.payload ? User.findById(req.payload.id) : null
-        ]).then((results) => {
-            var articles = results[0];
-            var articlesCount = results[1];
-            var user = results[2];
+        console.log(query);
+       return Promise.all([
+        Article.find(query)
+          .limit(Number(limit))
+          .skip(Number(offset))
+          .sort({ createdAt: -1 }) // -1 means descending order, +1 means ascending order
+          .populate('author')
+          .exec(),
+        Article.countDocuments(query).exec(),
+        req.user ? User.findById(req.user.id) : null
+      ]).then((results) => {
+        const [articles, articlesCount, user] = results
+  
+        return res.json({
+          articles: articles.map((article) => {
+            return article.toJSONFor(user);
 
-            return res.json({
-                articles: articles.map((article) => {
-                    return article.toJSONFor(user)
-                }),
-                articlesCount: articlesCount,
-
-            })
+          }),
+          articlesCount: articlesCount
         })
+      })
     }).catch(next)
-});
-
+  }
+);
 
 // Feed articles are articles that are published by the user
 
@@ -107,7 +91,6 @@ router.get('/feed', auth.verifyToken, async (req, res, next) => {
     if (typeof req.query.offset !== 'undefined') {
         offset = req.query.offset;
     }
-
     const user = await User.findById(req.user.userId)
 
     console.log({ user })
@@ -115,7 +98,7 @@ router.get('/feed', auth.verifyToken, async (req, res, next) => {
     Article.find({ author: { $in: user.following } })
         .limit(Number(limit))
         .skip(Number(offset))
-        .populate('author')
+        .populate('author').populate('comments')
         .exec((err, articles) => {
             if (err) {
                 res.status(500).json({ success: false, data: null, err })
@@ -130,7 +113,7 @@ router.get('/feed', auth.verifyToken, async (req, res, next) => {
 // Get all tags
 router.get('/tags', async (req, res, next) => {
     try {
-        let tags = await Article.find().distinct('tagList');
+        let tags = await Article.distinct('tagList');
         res.status(200).json({ tags: tags });
     } catch (error) {
         next(error);
@@ -139,17 +122,13 @@ router.get('/tags', async (req, res, next) => {
 
 // Fetch Single article
 router.get('/:slug', async (req, res, next) => {
-    console.log({ slug: req.params.slug })
+    let slug = req.params.slug;
+    const match = {};
+    
     try {
-        req.body.slug = await slug(req.body.title);
-        req.body = req.user.userId;
-        
-        await Article.findOne({slug}, req.body ).populate("author","username email").exec((err, articleData) => {
-            if (err) {
-                return res.status(500).json({ success: false, err, data: null })
-            }
-            
-        });
+        const singleArticle = await Article.findOne({slug}, req.body).populate('author', 'username email following').populate("comments").exec();
+        console.log({ singleArticle })  
+        return res.json({ article: singleArticle.toJSONFor() });
     } catch (error) {
         next(error);
     }
@@ -186,8 +165,8 @@ router.post('/:slug/comments', auth.verifyToken, async (req, res, next) => {
         req.body.author = req.user.userId;
         
        const comment = await Comment.create(req.body);
-        const commentData = await Comment.findOne({ _id: comment._id }).populate("author","username email").exec();
-        res.status(200).json({ comment: commentData });
+        const commentData = await Comment.findOne({ _id: comment._id }).populate("author","username email following ").exec();
+        res.status(200).json({ comment: commentData.toJSONForComments() });
     } catch (error) {
         next(error);
     }
@@ -197,8 +176,8 @@ router.post('/:slug/comments', auth.verifyToken, async (req, res, next) => {
 router.get('/:slug/comments', async (req, res, next) => {
     let slug = req.params.slug;
     try {
-        const comments = await Comment.find({ slug }).populate("author","username email").exec();
-        res.status(200).json({ comments: comments });
+        const comments = await Comment.findOne({ slug }).populate("author","username email").exec();
+        res.status(200).json({ comments: comments.toJSONForComments() });
     } catch (error) {
         next(error);
     }
@@ -221,15 +200,21 @@ router.delete('/:slug/comments/:id', auth.verifyToken, async (req, res, next) =>
 router.post('/:slug/favorite', auth.verifyToken, async (req, res, next) => {
     let slug = req.params.slug;
     
-    req.body.author = req.user.userId;
     try {
+        let article = await Article.findOne({ slug });
         let user = await User.findOne({ _id: req.user.userId });
     
-        let updatedArticle = await Article.findOneAndUpdate({ slug }, { $push: {favoriteList: user._id }, $inc: { favoritesCount: 1 }},  { returnNewDocument: true }).populate("author","username email").exec();
-
-        let updatedUser = await User.findByIdAndUpdate(user._id, {
+        let updatedArticle = await Article.findOneAndUpdate(
+            { slug }, 
+            { $push: {favoriteList: user._id }, $inc: { favoritesCount: 1 }},  
+            { returnNewDocument: true }
+        );
+        let updatedUser = await User.findOneAndUpdate(user._id, {
             $push: { favoritedArticles: updatedArticle._id },
-          });
+        });
+        console.log(updatedArticle);
+        console.log(updatedUser);
+        
          res.json({ article: updatedArticle });
     } catch (error) {
         next(error);
@@ -244,10 +229,10 @@ router.delete('/:slug/favorite', auth.verifyToken, async (req, res, next) => {
     try {
         let user = await User.findOne({ _id: req.user.userId });
     
-        let updatedArticle = await Article.findOneAndUpdate({ slug }, { $pull: {favoriteList: user._id }, $inc: { favoritesCount: -1 }},  { returnNewDocument: true }).populate("author","username email").exec();
+        let updatedArticle = await Article.findOneAndUpdate({ slug }, { $pull: {favoriteList: user._id }, $inc: { favoritesCount: -1 }},  { new: true }).populate("author","username email").exec();
 
         let updatedUser = await User.findByIdAndUpdate(user._id, {
-            $push: { favoritedArticles: updatedArticle._id },
+            $pull: { favoritedArticles: updatedArticle._id },
           });
          res.json({ article: updatedArticle });
     } catch (error) {
@@ -255,15 +240,7 @@ router.delete('/:slug/favorite', auth.verifyToken, async (req, res, next) => {
     }
 });
 
-// Follow Article
-router.post('/:slug/follow', auth.verifyToken, async (req, res, next) => {
-    let slug = req.params.slug;
-    try {
-        var article = await Article.findOneAndUpdate({ slug }, { $inc: { follow: 1 } });
-        res.status(200).json({ article });
-    } catch (error) {
-        next(error);
-    }
-});
-
 module.exports = router;
+
+
+// Following, article router filter, feed, single article, follow and unfollow

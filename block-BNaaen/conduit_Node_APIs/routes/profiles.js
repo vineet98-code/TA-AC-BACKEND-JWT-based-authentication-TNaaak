@@ -7,8 +7,8 @@ var auth = require('../middleware/auth');
 
 //Get Profile
 
-router.get('/:username', auth.verifyToken, async (req, res, next) => {
-  console.log(req.params.username);
+router.get('/:username', auth.optionalAuth, async (req, res, next) => {
+  console.log(req.user);
   try {
     let username = req.params.username;
     let user = await User.findOne({ username });
@@ -18,7 +18,8 @@ router.get('/:username', auth.verifyToken, async (req, res, next) => {
           username: user.username,
           bio: user.bio,
           image: user.image,
-          following: user.following,
+          following: user ? user.isFollowing(this._id) : false,
+          followers: user ? user.isFollowing(this._id) : false
         }
       });
     } else {
@@ -29,8 +30,6 @@ router.get('/:username', auth.verifyToken, async (req, res, next) => {
     }
 });
 
-
-
 //Follow user
 
 router.post('/:username/follow', auth.verifyToken, async (req, res, next) => {
@@ -38,56 +37,47 @@ router.post('/:username/follow', auth.verifyToken, async (req, res, next) => {
   
   try {
     let username = req.params.username;
-    let userToFollow = await User.findOne({ username });
-    if (!userToFollow) {
-      return res.status(400).json({ errors: 'User not available'});
-    }
-    await User.findByIdAndUpdate(userToFollow.id, {$push: { followers: req.user.userId },
-    });
-    var currentUser = await User.findByIdAndUpdate(
-       req.user.userId,
-      { $push: { following: userToFollow.id } },
-      { new: true }
-    );
-    res.json({
-      profile: {
-        username: currentUser.username,
-        bio: currentUser.bio,
-        image: currentUser.image,
-        following: currentUser.following,
-      },
-    });
-  } catch (error) {
+    let user = await User.findOne({ username });  // loggedin user
+    let currentUser = await User.findOneAndUpdate(req.user._id, { $addToSet: { following: user._id } }, { new: true }); // iska id usme uska id isme
+    let followerUser = await User.findOneAndUpdate(req.user._id, { $addToSet: { follower: currentUser._id } }, { new: true });
+
+    res.status(201).json({
+      Profile: {
+        username: user.username,
+        bio: user.bio,
+        image: user.image,
+        following: currentUser ? currentUser.isFollowing(user._id) : false,
+        followers: followerUser ? followerUser.isFollowing(currentUser._id) : false
+ }
+  });
+
+} catch (error) {
     next(error);
   }
 });
 
-// unfollow user
-router.delete("/:username/follow", auth.verifyToken, async (req, res, next) => {
-  console.log(req.user);
-  try {
-    var username = req.params.username;
-    var userToUnfollow = await User.findOne({ username });
-    if (!userToUnfollow)
-      return res.status(404).json({ error: "User not available!" });
 
-      await User.findByIdAndUpdate(userToUnfollow.id, {
-      $pull: { followers: req.user.userId },
-    });
-    var currentUser = await User.findByIdAndUpdate(
-      req.user.userId,
-      { $pull: { following: userToUnfollow.id } },
-      { new: true }
-    );
-    res.json({
-      profile: {
-        username: currentUser.username,
-        bio: currentUser.bio,
-        image: currentUser.image,
-        following: currentUser.following,
-      },
-    });
-  } catch (error) {
+// unfollow user
+router.delete('/:username/follow', auth.verifyToken, async (req, res, next) => {
+  // console.log(req.user);
+  
+  try {
+    let username = req.params.username;
+    let user = await User.findOne({ username });  // loggedin user
+    let currentUser = await User.findOneAndUpdate(req.user._id, { $pull: { following: user._id } }, { new: true }); // iska id usme uska id isme
+    let followerUser = await User.findOneAndUpdate(req.user._id, { $pull: { follower: currentUser._id } }, { new: true });
+
+    res.status(201).json({
+      Profile: {
+        username: user.username,
+        bio: user.bio,
+        image: user.image,
+        following: currentUser ? currentUser.isFollowing(user._id) : false,
+        followers: followerUser ? followerUser.isFollowing(currentUser._id) : false
+ }
+  });
+
+} catch (error) {
     next(error);
   }
 });

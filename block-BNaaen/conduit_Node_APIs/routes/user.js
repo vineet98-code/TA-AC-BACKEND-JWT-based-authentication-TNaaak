@@ -13,7 +13,7 @@ router.get('/', auth.verifyToken,  async (req, res, next) => {
     try {
     let user = await User.findById(req.user.userId);
     console.log(user);
-    res.status(200).json({ user });
+    res.status(200).json({ user: user.userJSON() });
     } catch (error) {
         next(error);
     }
@@ -22,9 +22,11 @@ router.get('/', auth.verifyToken,  async (req, res, next) => {
 //Update User
 router.put('/', auth.verifyToken, async (req, res, next) => {
     console.log(req.user);
+    
     try {
-      let user = await User.findByIdAndUpdate(req.user.userId, req.body.user);
-      return res.status(200).json({ user });
+      let user = await User.findByIdAndUpdate(req.user.userId,  { new: true });
+      
+      return res.status(200).json({ user: user.userJSON()});
     } catch (error) {
       next(error);
     }
